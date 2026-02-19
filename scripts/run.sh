@@ -1,3 +1,3 @@
 #!/bin/bash
 
-qemu-system-arm -M raspi2b -kernel kernel.img -vga std
+qemu-system-arm -M raspi2b -kernel kernel.img -display sdl
