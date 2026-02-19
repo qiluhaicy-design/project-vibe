@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#define UART_BASE 0x3F201000
+#define UART_BASE 0x09000000
 #define MAILBOX_BASE 0x3F00B880
 
 #define MAILBOX_READ   ((volatile uint32_t*)(MAILBOX_BASE + 0x0))
@@ -29,11 +29,6 @@ int my_abs(int x) {
 }
 
 void uart_init() {
-    // Set GPIO 14 and 15 to alt0 for UART
-    volatile uint32_t* gpfsel1 = (volatile uint32_t*)(0x3F200000 + 0x04);
-    *gpfsel1 = (*gpfsel1 & ~(7 << 12)) | (4 << 12); // GPIO14 alt0
-    *gpfsel1 = (*gpfsel1 & ~(7 << 15)) | (4 << 15); // GPIO15 alt0
-
     // Disable UART
     *(volatile uint32_t*)(UART_BASE + 0x30) = 0;
     // Clear pending interrupts
@@ -57,96 +52,20 @@ void uart_puts(const char* s) {
 }
 
 uint32_t mailbox_read(uint8_t channel) {
-    uint32_t data;
-    do {
-        while (*MAILBOX_STATUS & MAILBOX_EMPTY);
-        data = *MAILBOX_READ;
-    } while ((data & 0xF) != channel);
-    return data >> 4;
+    // Not used
+    return 0;
 }
 
 void mailbox_write(uint8_t channel, uint32_t data) {
-    while (*MAILBOX_STATUS & MAILBOX_FULL);
-    *MAILBOX_WRITE = (data << 4) | channel;
+    // Not used
 }
 
 void init_framebuffer() {
-    uart_puts("Init framebuffer start\n");
-    // First, get board revision
-    uint32_t __attribute__((aligned(16))) mailbox_rev[8];
-    mailbox_rev[0] = 7*4; // size
-    mailbox_rev[1] = 0; // request
-    mailbox_rev[2] = 0x10002; // get board revision
-    mailbox_rev[3] = 4;
-    mailbox_rev[4] = 0;
-    mailbox_rev[5] = 0;
-    mailbox_rev[6] = 0; // end
-    mailbox_write(8, (uint32_t)mailbox_rev);
-    uart_puts("Rev mailbox written\n");
-    mailbox_read(8);
-    uart_puts("Rev mailbox read\n");
-    uart_puts("Rev response: ");
-    uint32_t resp = mailbox_rev[5];
-    for (int i = 28; i >= 0; i -= 4) {
-        uint8_t digit = (resp >> i) & 0xF;
-        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
-    }
-    uart_puts("\n");
-
-    uint32_t __attribute__((aligned(16))) mailbox[36];
-    mailbox[0] = 35*4; // buffer size
-    mailbox[1] = 0; // request
-    mailbox[2] = 0x48003; // set physical width/height
-    mailbox[3] = 8;
-    mailbox[4] = 0;
-    mailbox[5] = fb_width;
-    mailbox[6] = fb_height;
-    mailbox[7] = 0x48004; // set virtual width/height
-    mailbox[8] = 8;
-    mailbox[9] = 0;
-    mailbox[10] = fb_width;
-    mailbox[11] = fb_height;
-    mailbox[12] = 0x48005; // set depth
-    mailbox[13] = 4;
-    mailbox[14] = 0;
-    mailbox[15] = 32; // 32 bpp
-    mailbox[16] = 0x40001; // allocate buffer
-    mailbox[17] = 8;
-    mailbox[18] = 0;
-    mailbox[19] = 16; // alignment
-    mailbox[20] = 0;
-    mailbox[21] = 0x40008; // get pitch
-    mailbox[22] = 4;
-    mailbox[23] = 0;
-    mailbox[24] = 0;
-    mailbox[25] = 0; // end
-    uart_puts("Mailbox buffer prepared\n");
-    mailbox_write(8, (uint32_t)mailbox);
-    uart_puts("Mailbox written\n");
-    mailbox_read(8);
-    uart_puts("Mailbox read\n");
-    uart_puts("Mailbox response: ");
-    resp = mailbox[1];
-    for (int i = 28; i >= 0; i -= 4) {
-        uint8_t digit = (resp >> i) & 0xF;
-        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
-    }
-    uart_puts("\n");
-    if (mailbox[1] != 0x80000000) {
-        uart_puts("Framebuffer init failed\n");
-        return;
-    }
-    fb_addr = (uint8_t*)(mailbox[19] & 0x3FFFFFFF);
-    fb_pitch = mailbox[23];
-    fb_size = mailbox[19] & 0x3FFFFFFF ? mailbox[20] : 0;
-    uart_puts("FB addr: ");
-    // print hex fb_addr
-    uint32_t addr = (uint32_t)fb_addr;
-    for (int i = 28; i >= 0; i -= 4) {
-        uint8_t digit = (addr >> i) & 0xF;
-        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
-    }
-    uart_puts("\n");
+    uart_puts("Init framebuffer\n");
+    // For QEMU virt, assume framebuffer at 0x40000000 + 0x200000
+    fb_addr = (uint8_t*)(0x40000000 + 0x200000);
+    fb_pitch = fb_width * 4;
+    fb_size = fb_height * fb_pitch;
     uart_puts("Framebuffer initialized\n");
 }
 

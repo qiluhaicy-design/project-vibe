@@ -26,15 +26,16 @@ Run `./scripts/run.sh` for graphics display (requires local machine with GUI).
 
 For UART output only (works in headless environments like Codespace):
 ```
-qemu-system-arm -M raspi3 -kernel kernel.img -nographic
+qemu-system-arm -M virt -kernel kernel.img -nographic
 ```
 
 If display fails, ensure QEMU has GUI support or use VNC:
 ```
-qemu-system-arm -M raspi3 -kernel kernel.img -vnc :0
+qemu-system-arm -M virt -kernel kernel.img -vnc :0
 ```
 Then connect with a VNC viewer.
 
+For real hardware testing (Raspberry Pi 2/3), copy kernel.img to SD card and boot.
 ## Architecture
 
 - `kernel/`: Core kernel code
