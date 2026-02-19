@@ -1,7 +1,7 @@
 #include <stdint.h>
 
-#define UART_BASE 0x20201000
-#define MAILBOX_BASE 0x2000B880
+#define UART_BASE 0x3F201000
+#define MAILBOX_BASE 0x3F00B880
 
 #define MAILBOX_READ   ((volatile uint32_t*)(MAILBOX_BASE + 0x0))
 #define MAILBOX_STATUS ((volatile uint32_t*)(MAILBOX_BASE + 0x18))
@@ -28,6 +28,25 @@ int my_abs(int x) {
     return x < 0 ? -x : x;
 }
 
+void uart_init() {
+    // Set GPIO 14 and 15 to alt0 for UART
+    volatile uint32_t* gpfsel1 = (volatile uint32_t*)(0x3F200000 + 0x04);
+    *gpfsel1 = (*gpfsel1 & ~(7 << 12)) | (4 << 12); // GPIO14 alt0
+    *gpfsel1 = (*gpfsel1 & ~(7 << 15)) | (4 << 15); // GPIO15 alt0
+
+    // Disable UART
+    *(volatile uint32_t*)(UART_BASE + 0x30) = 0;
+    // Clear pending interrupts
+    *(volatile uint32_t*)(UART_BASE + 0x44) = 0x7FF;
+    // Set baud rate to 115200 (assuming 48MHz clock)
+    *(volatile uint32_t*)(UART_BASE + 0x24) = 1; // IBRD
+    *(volatile uint32_t*)(UART_BASE + 0x28) = 40; // FBRD
+    // Set word length to 8 bits, no parity, 1 stop bit
+    *(volatile uint32_t*)(UART_BASE + 0x2C) = 0x70; // LCRH
+    // Enable UART, TX, RX
+    *(volatile uint32_t*)(UART_BASE + 0x30) = 0x301;
+}
+
 void uart_putc(char c) {
     while ((*(volatile uint32_t*)(UART_BASE + 0x18)) & 0x20);
     *(volatile uint32_t*)UART_BASE = c;
@@ -52,6 +71,28 @@ void mailbox_write(uint8_t channel, uint32_t data) {
 }
 
 void init_framebuffer() {
+    uart_puts("Init framebuffer start\n");
+    // First, get board revision
+    uint32_t __attribute__((aligned(16))) mailbox_rev[8];
+    mailbox_rev[0] = 7*4; // size
+    mailbox_rev[1] = 0; // request
+    mailbox_rev[2] = 0x10002; // get board revision
+    mailbox_rev[3] = 4;
+    mailbox_rev[4] = 0;
+    mailbox_rev[5] = 0;
+    mailbox_rev[6] = 0; // end
+    mailbox_write(8, (uint32_t)mailbox_rev);
+    uart_puts("Rev mailbox written\n");
+    mailbox_read(8);
+    uart_puts("Rev mailbox read\n");
+    uart_puts("Rev response: ");
+    uint32_t resp = mailbox_rev[5];
+    for (int i = 28; i >= 0; i -= 4) {
+        uint8_t digit = (resp >> i) & 0xF;
+        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
+    }
+    uart_puts("\n");
+
     uint32_t __attribute__((aligned(16))) mailbox[36];
     mailbox[0] = 35*4; // buffer size
     mailbox[1] = 0; // request
@@ -79,8 +120,18 @@ void init_framebuffer() {
     mailbox[23] = 0;
     mailbox[24] = 0;
     mailbox[25] = 0; // end
+    uart_puts("Mailbox buffer prepared\n");
     mailbox_write(8, (uint32_t)mailbox);
+    uart_puts("Mailbox written\n");
     mailbox_read(8);
+    uart_puts("Mailbox read\n");
+    uart_puts("Mailbox response: ");
+    resp = mailbox[1];
+    for (int i = 28; i >= 0; i -= 4) {
+        uint8_t digit = (resp >> i) & 0xF;
+        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
+    }
+    uart_puts("\n");
     if (mailbox[1] != 0x80000000) {
         uart_puts("Framebuffer init failed\n");
         return;
@@ -88,6 +139,14 @@ void init_framebuffer() {
     fb_addr = (uint8_t*)(mailbox[19] & 0x3FFFFFFF);
     fb_pitch = mailbox[23];
     fb_size = mailbox[19] & 0x3FFFFFFF ? mailbox[20] : 0;
+    uart_puts("FB addr: ");
+    // print hex fb_addr
+    uint32_t addr = (uint32_t)fb_addr;
+    for (int i = 28; i >= 0; i -= 4) {
+        uint8_t digit = (addr >> i) & 0xF;
+        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
+    }
+    uart_puts("\n");
     uart_puts("Framebuffer initialized\n");
 }
 
@@ -141,6 +200,7 @@ void draw_window(struct Window* win) {
 }
 
 void main() {
+    uart_init();
     uart_puts("Hello from microkernel!\n");
     init_framebuffer();
     // Create a window
