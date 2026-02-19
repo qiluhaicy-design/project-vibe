@@ -22,15 +22,18 @@ Run `make` to build `kernel.img`.
 
 ## Running
 
-Run `./scripts/run.sh` or:
+Run `./scripts/run.sh` for graphics display (requires local machine with GUI).
+
+For UART output only (works in headless environments like Codespace):
 ```
 qemu-system-arm -M raspi2b -kernel kernel.img -nographic
 ```
 
-For graphics (if display available):
+If display fails, ensure QEMU has GUI support or use VNC:
 ```
-qemu-system-arm -M raspi2b -kernel kernel.img -display gtk
+qemu-system-arm -M raspi2b -kernel kernel.img -vnc :0
 ```
+Then connect with a VNC viewer.
 
 ## Architecture
 
